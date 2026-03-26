@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>二维码自动播放系统</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: #1a1a1a;
+            color: #fff;
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        .upload-screen {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            gap: 20px;
+            padding: 20px;
+        }
+        
+        .upload-area {
+            border: 3px dashed #4a90e2;
+            border-radius: 20px;
+            padding: 60px 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: rgba(74, 144, 226, 0.1);
+            max-width: 600px;
+            width: 100%;
+        }
+        
+        .upload-area:hover {
+            background: rgba(74, 144, 226, 0.2);
+            transform: translateY(-2px);
+        }
+        
+        input[type="file"] {
+            display: none;
+        }
+        
+        .file-label {
+            font-size: 24px;
+            font-weight: bold;
+            color: #4a90e2;
+            cursor: pointer;
+        }
+        
+        .hint {
+            margin-top: 10px;
+            color: #888;
+            font-size: 14px;
+        }
+        
+        .player-screen {
+            display: none;
+            height: 100vh;
+            flex-direction: column;
+            position: relative;
+        }
+        
+        .qr-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: #fff;
+            position: relative;
+            overflow: hidden;
+            padding: 40px;
+        }
+        
+        #qrWrapper {
+            padding: 30px;
+            background: #fff;
+            border-radius: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            border: 8px solid #4a90e2;
+            transition: border-color 0.4s ease;
+            text-align: center;
+        }
+        
+        #qrcode img {
+            display: block;
+            width: 400px !important;
+            height: 400px !important;
+            image-rendering: pixelated;
+            margin-bottom: 20px;
+        }
+        
+        .data-info {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin-bottom: 15px;
+            font-size: 14px;
+            color: #555;
+        }
+        
+        .data-item {
+            background: #f5f5f5;
+            padding: 8px 16px;
+            border-radius: 6px;
+            border-left: 3px solid #4a90e2;
+        }
+        
+        .data-label {
+            font-weight: bold;
+            color: #333;
+            margin-right: 8px;
+        }
+        
+        .url-display {
+            font-family: monospace;
+            font-size: 13px;
+            color: #666;
+            word-break: break-all;
+            max-width: 400px;
+            margin-top: 10px;
+            padding: 10px;
+            background: #fafafa;
+            border-radius: 6px;
+            border: 1px solid #eee;
+        }
+        
+        .info-bar {
+            background: #2a2a2a;
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-top: 1px solid #444;
+        }
+        
+        .progress-info {
+            font-size: 24px;
+            font-weight: bold;
+            color: #4a90e2;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+        
+        button {
+            background: #4a90e2;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        button:hover {
+            background: #357abd;
+            transform: translateY(-1px);
+        }
+        
+        button.secondary {
+            background: #555;
+        }
+        
+        button.secondary:hover {
+            background: #666;
+        }
+        
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #4caf50;
+            display: inline-block;
+            margin-right: 8px;
+        }
+        
+        .status-indicator.paused {
+            background: #ff9800;
+        }
+        
+        .speed-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #888;
+            font-size: 14px;
+        }
+        
+        input[type="range"] {
+            width: 100px;
+        }
+        
+        .keyboard-hint {
+            position: fixed;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.8);
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 12px;
+            color: #aaa;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+        }
+        
+        .player-screen:hover .keyboard-hint {
+            opacity: 1;
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 上传界面 -->
+    <div class="upload-screen" id="uploadScreen">
+        <h1 style="font-size: 32px; margin-bottom: 10px;">📱 二维码自动播放系统</h1>
+        <p style="color: #888; margin-bottom: 30px;">上传Excel自动提取数据生成二维码</p>
+        
+        <div class="upload-area" onclick="document.getElementById('fileInput').click()">
+            <div class="file-label">📁 选择Excel文件</div>
+            <div class="hint">支持 .xlsx, .xls 格式<br>自动读取指定列并生成二维码</div>
+        </div>
+        <input type="file" id="fileInput" accept=".xlsx,.xls" onchange="handleFile(event)">
+        
+        <div id="fileInfo" style="margin-top: 20px; color: #4a90e2; font-weight: bold;"></div>
+    </div>
+
+    <!-- 播放界面 -->
+    <div class="player-screen" id="playerScreen">
+        <div class="qr-container" id="qrContainer">
+            <div id="qrWrapper">
+                <div id="qrcode"></div>
+                <div class="data-info">
+                    <div class="data-item">
+                        <span class="data-label">E:</span>
+                        <span id="colE">-</span>
+                    </div>
+                    <div class="data-item">
+                        <span class="data-label">F:</span>
+                        <span id="colF">-</span>
+                    </div>
+                    <div class="data-item">
+                        <span class="data-label">G:</span>
+                        <span id="colG">-</span>
+                    </div>
+                </div>
+                <div class="url-display" id="urlDisplay">等待开始...</div>
+            </div>
+        </div>
+        
+        <div class="keyboard-hint">
+            快捷键：空格键 暂停/继续 | ← → 切换 | ESC 退出
+        </div>
+        
+        <div class="info-bar">
+            <div style="display: flex; align-items: center; gap: 20px;">
+                <div class="progress-info">
+                    <span id="currentNum">0</span> / <span id="totalNum">0</span>
+                </div>
+            </div>
+            
+            <div class="controls">
+                <div class="speed-control">
+                    <span>间隔:</span>
+                    <input type="range" id="speedRange" min="1" max="10" value="3" onchange="updateSpeed()">
+                    <span id="speedValue">3秒</span>
+                </div>
+                
+                <button class="secondary" onclick="prevQR()">⏮ 上一个</button>
+                
+                <button id="playBtn" onclick="togglePlay()">
+                    <span class="status-indicator" id="statusIndicator"></span>
+                    <span id="playBtnText">开始播放</span>
+                </button>
+                
+                <button class="secondary" onclick="nextQR()">下一个 ⏭</button>
+                <button class="secondary" onclick="resetAll()">退出 ↩</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /**********************************************************
+         * 配置区：手动修改以下参数
+         **********************************************************/
+        const CONFIG = {
+            // 二维码数据来源列：0=A, 1=B, 2=C, 3=D, 4=E, 5=F, 6=G, 7=H（默认）, 8=I...
+            urlColumn: 18,
+            
+            // 辅助信息列（固定显示E,F,G，对应索引4,5,6）
+            infoColumns: {
+                E: 2,
+                F: 4, 
+                G: 10
+            }
+        };
+        
+        let data = [];
+        let currentIndex = 0;
+        let isPlaying = true;
+        let timer = null;
+        let interval = 3000;
+        let isBlue = true; // 颜色切换状态
+        
+        function handleFile(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            document.getElementById('fileInfo').innerHTML = '<span class="loading"></span> 正在读取...';
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const raw = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(raw, {type: 'array'});
+                    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const jsonData = XLSX.utils.sheet_to_json(firstSheet, {header: 1, defval: ''});
+                    
+                    data = [];
+                    jsonData.forEach((row, index) => {
+                        const url = row[CONFIG.urlColumn];
+                        if (url && typeof url === 'string' && url.trim().startsWith('http')) {
+                            data.push({
+                                url: url.trim(),
+                                colE: row[CONFIG.infoColumns.E] || '-',
+                                colF: row[CONFIG.infoColumns.F] || '-',
+                                colG: row[CONFIG.infoColumns.G] || '-',
+                                row: index + 1
+                            });
+                        }
+                    });
+                    
+                    if (data.length === 0) {
+                        const colLetter = String.fromCharCode(65 + CONFIG.urlColumn);
+                        alert(`未在${colLetter}列找到有效的网址数据。\n请检查配置区的 urlColumn 设置（当前为${colLetter}列）`);
+                        document.getElementById('fileInfo').textContent = '';
+                        return;
+                    }
+                    
+                    document.getElementById('fileInfo').innerHTML = 
+                        `✅ 成功读取 ${data.length} 条数据，即将开始...`;
+                    
+                    setTimeout(() => {
+                        document.getElementById('uploadScreen').style.display = 'none';
+                        document.getElementById('playerScreen').style.display = 'flex';
+                        document.getElementById('totalNum').textContent = data.length;
+                        showQR(0);
+                        setTimeout(() => togglePlay(), 500);
+                    }, 800);
+                    
+                } catch (err) {
+                    alert('读取文件失败：' + err.message);
+                    document.getElementById('fileInfo').textContent = '';
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+        
+        function showQR(index) {
+            if (index < 0 || index >= data.length) return;
+            
+            currentIndex = index;
+            const item = data[index];
+            
+            // 生成二维码
+            document.getElementById('qrcode').innerHTML = '';
+            new QRCode(document.getElementById("qrcode"), {
+                text: item.url,
+                width: 400,
+                height: 400,
+                colorDark: "#000000",
+                colorLight: "#ffffff",
+                correctLevel: QRCode.CorrectLevel.M
+            });
+            
+            // 更新辅助信息
+            document.getElementById('colE').textContent = item.colE;
+            document.getElementById('colF').textContent = item.colF;
+            document.getElementById('colG').textContent = item.colG;
+            document.getElementById('urlDisplay').textContent = item.url;
+            document.getElementById('currentNum').textContent = index + 1;
+            
+            // 蓝紫双色切换（柔和但明显）
+            const wrapper = document.getElementById('qrWrapper');
+            const items = document.querySelectorAll('.data-item');
+            if (isBlue) {
+                wrapper.style.borderColor = '#9b59b6'; // 紫色
+                items.forEach(el => el.style.borderLeftColor = '#9b59b6');
+            } else {
+                wrapper.style.borderColor = '#4a90e2'; // 蓝色
+                items.forEach(el => el.style.borderLeftColor = '#4a90e2');
+            }
+            isBlue = !isBlue;
+        }
+        
+        function togglePlay() {
+            isPlaying = !isPlaying;
+            const btnText = document.getElementById('playBtnText');
+            const indicator = document.getElementById('statusIndicator');
+            
+            if (isPlaying) {
+                btnText.textContent = '暂停播放';
+                indicator.classList.remove('paused');
+                playNext();
+            } else {
+                btnText.textContent = '继续播放';
+                indicator.classList.add('paused');
+                if (timer) clearTimeout(timer);
+            }
+        }
+        
+        function playNext() {
+            if (!isPlaying) return;
+            if (currentIndex >= data.length - 1) currentIndex = -1;
+            showQR(currentIndex + 1);
+            timer = setTimeout(() => playNext(), interval);
+        }
+        
+        function nextQR() {
+            if (currentIndex < data.length - 1) {
+                showQR(currentIndex + 1);
+                if (isPlaying) { clearTimeout(timer); timer = setTimeout(() => playNext(), interval); }
+            }
+        }
+        
+        function prevQR() {
+            if (currentIndex > 0) {
+                showQR(currentIndex - 1);
+                if (isPlaying) { clearTimeout(timer); timer = setTimeout(() => playNext(), interval); }
+            }
+        }
+        
+        function updateSpeed() {
+            const val = document.getElementById('speedRange').value;
+            interval = val * 1000;
+            document.getElementById('speedValue').textContent = val + '秒';
+        }
+        
+        function resetAll() {
+            if (confirm('确定要退出并重新上传文件吗？')) location.reload();
+        }
+        
+        // 键盘快捷键
+        document.addEventListener('keydown', (e) => {
+            if (document.getElementById('playerScreen').style.display === 'none') return;
+            switch(e.code) {
+                case 'Space': e.preventDefault(); togglePlay(); break;
+                case 'ArrowLeft': prevQR(); break;
+                case 'ArrowRight': nextQR(); break;
+                case 'Escape': resetAll(); break;
+            }
+        });
+        
+        window.addEventListener('keydown', (e) => {
+            if(e.code === 'Space' && e.target === document.body) e.preventDefault();
+        });
+    </script>
+</body>
+</html>
