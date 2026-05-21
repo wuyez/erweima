@@ -49,6 +49,38 @@
             gap: 8px;
         }
 
+        .mode-switch {
+            display: flex;
+            gap: 0;
+            margin-bottom: 14px;
+            background: #1e1e1e;
+            border-radius: 10px;
+            padding: 4px;
+            border: 1px solid #333;
+        }
+
+        .mode-switch label {
+            flex: 1;
+            text-align: center;
+            padding: 10px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            color: #888;
+            transition: all 0.2s;
+            user-select: none;
+        }
+
+        .mode-switch input[type="radio"] {
+            display: none;
+        }
+
+        .mode-switch input[type="radio"]:checked + label {
+            background: #4a90e2;
+            color: #fff;
+            font-weight: bold;
+        }
+
         .paste-area {
             width: 100%;
             min-height: 160px;
@@ -338,7 +370,18 @@
             color: #4a90e2;
             font-family: monospace;
         }
+
+        .mode-desc {
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 10px;
+            padding: 8px 12px;
+            background: #1e1e1e;
+            border-radius: 8px;
+            border-left: 3px solid #4a90e2;
+        }
     </style>
+<base target="_blank">
 <base target="_blank">
 </head>
 <body>
@@ -350,14 +393,25 @@
 
         <div class="upload-card">
             <h2>📋 直接粘贴数据</h2>
+
+            <!-- 模式切换 -->
+            <div class="mode-switch">
+                <input type="radio" name="pasteMode" id="modeMulti" value="multi" checked onchange="updateModeDesc()">
+                <label for="modeMulti">📊 多列模式</label>
+                <input type="radio" name="pasteMode" id="modeSingle" value="single" onchange="updateModeDesc()">
+                <label for="modeSingle">📄 单列模式</label>
+            </div>
+
+            <div class="mode-desc" id="modeDesc">
+                当前为<b>多列模式</b>：仅第 <code>18</code> 列（R列）值为 <code>"设备接入"</code> 时才生成二维码。<br>
+                二维码取自第 <code>19</code> 列（S列），下方显示第 <code>3</code> 列（C列）、第 <code>5</code> 列（E列）、第 <code>11</code> 列（K列）
+            </div>
+
             <textarea 
                 class="paste-area" 
                 id="pasteInput" 
                 placeholder="在此处粘贴从Excel或其他地方复制的数据...&#10;支持 Tab 分隔或逗号分隔的多列表格数据&#10;每行一条记录"></textarea>
-            <div class="config-note">
-                当前配置：仅第 <code>18</code> 列（R列）值为 <code>"设备接入"</code> 时才生成二维码。<br>
-                二维码取自第 <code>19</code> 列（S列），下方显示第 <code>3</code> 列（C列）、第 <code>5</code> 列（E列）、第 <code>11</code> 列（K列）
-            </div>
+
             <div class="paste-actions">
                 <button class="danger" onclick="clearPaste()">🗑 清空</button>
                 <button onclick="handlePaste()">▶ 开始播放</button>
@@ -371,13 +425,11 @@
                 <div class="file-label">📁 选择Excel文件</div>
                 <div class="hint">支持 .xlsx, .xls 格式<br>自动读取指定列并生成二维码</div>
             </div>
-			
-			 <!-- 新增的下载链接，放在上传区域下方 -->
-        <a href="https://github.com/wuyez/erweima/raw/refs/heads/main/%E4%BA%8C%E7%BB%B4%E7%A0%81%E6%BA%90%E6%96%87%E4%BB%B6%E6%A8%A1%E6%9D%BF.xlsx" 
-          >
-            📥 导入文件模板下载
-        </a>
-			
+
+            <a href="https://github.com/wuyez/erweima/raw/refs/heads/main/%E4%BA%8C%E7%BB%B4%E7%A0%81%E6%BA%90%E6%96%87%E4%BB%B6%E6%A8%A1%E6%9D%BF.xlsx">
+                📥 导入文件模板下载
+            </a>
+
             <input type="file" id="fileInput" accept=".xlsx,.xls" onchange="handleFile(event)">
         </div>
 
@@ -389,7 +441,7 @@
         <div class="qr-container" id="qrContainer">
             <div id="qrWrapper">
                 <div id="qrcode"></div>
-                <div class="data-info">
+                <div class="data-info" id="dataInfo">
                     <div class="data-item">
                         <span class="data-label">C:</span>
                         <span id="colC">-</span>
@@ -460,6 +512,24 @@
         let timer = null;
         let interval = 3000;
         let isBlue = true;
+        let isSingleMode = false; // 当前是否为单列模式
+
+        // ========== 模式切换 ==========
+
+        function updateModeDesc() {
+            const mode = document.querySelector('input[name="pasteMode"]:checked').value;
+            isSingleMode = (mode === 'single');
+            const descEl = document.getElementById('modeDesc');
+            const textarea = document.getElementById('pasteInput');
+
+            if (isSingleMode) {
+                descEl.innerHTML = '当前为<b>单列模式</b>：每行一个URL，直接生成二维码，不过滤，不显示辅助信息。适合从Excel复制单列链接粘贴。';
+                textarea.placeholder = "在此处粘贴单列URL数据...\n每行一个链接\n例如：https://example.com/1";
+            } else {
+                descEl.innerHTML = '当前为<b>多列模式</b>：仅第 <code>18</code> 列（R列）值为 <code>"设备接入"</code> 时才生成二维码。<br>二维码取自第 <code>19</code> 列（S列），下方显示第 <code>3</code> 列（C列）、第 <code>5</code> 列（E列）、第 <code>11</code> 列（K列）';
+                textarea.placeholder = "在此处粘贴从Excel或其他地方复制的数据...\n支持 Tab 分隔或逗号分隔的多列表格数据\n每行一条记录";
+            }
+        }
 
         // ========== 粘贴文本处理 ==========
 
@@ -483,41 +553,61 @@
 
             data = [];
 
-            lines.forEach((line, index) => {
-                // 优先按 Tab 分隔，如果没有 Tab 则按逗号分隔
-                let cols;
-                if (line.includes('\t')) {
-                    cols = line.split('\t');
-                } else if (line.includes(',')) {
-                    cols = line.split(',');
-                } else {
-                    // 尝试按多个空格分隔（某些复制场景）
-                    cols = line.split(/\s{2,}/);
+            if (isSingleMode) {
+                // 单列模式：每行一个URL
+                lines.forEach((line, index) => {
+                    const url = line.trim();
+                    if (url && url.startsWith('http')) {
+                        data.push({
+                            url: url,
+                            colC: '-',
+                            colE: '-',
+                            colK: '-',
+                            row: index + 1
+                        });
+                    }
+                });
+
+                if (data.length === 0) {
+                    alert('未找到有效的URL数据。\n\n请确认每行一个以http开头的链接。');
+                    return;
                 }
+            } else {
+                // 多列模式：按Tab/逗号分隔解析
+                lines.forEach((line, index) => {
+                    let cols;
+                    if (line.includes('\t')) {
+                        cols = line.split('\t');
+                    } else if (line.includes(',')) {
+                        cols = line.split(',');
+                    } else {
+                        cols = line.split(/\s{2,}/);
+                    }
 
-                const url = cols[CONFIG.urlColumn];
-                const filterVal = (cols[CONFIG.filterColumn] || '').toString().trim();
+                    const url = cols[CONFIG.urlColumn];
+                    const filterVal = (cols[CONFIG.filterColumn] || '').toString().trim();
 
-                if (url && typeof url === 'string' && url.trim().startsWith('http') && filterVal === CONFIG.filterValue) {
-                    data.push({
-                        url: url.trim(),
-                        colC: cols[CONFIG.infoColumns.C] || '-',
-                        colE: cols[CONFIG.infoColumns.E] || '-',
-                        colK: cols[CONFIG.infoColumns.K] || '-',
-                        row: index + 1
-                    });
+                    if (url && typeof url === 'string' && url.trim().startsWith('http') && filterVal === CONFIG.filterValue) {
+                        data.push({
+                            url: url.trim(),
+                            colC: cols[CONFIG.infoColumns.C] || '-',
+                            colE: cols[CONFIG.infoColumns.E] || '-',
+                            colK: cols[CONFIG.infoColumns.K] || '-',
+                            row: index + 1
+                        });
+                    }
+                });
+
+                if (data.length === 0) {
+                    alert('未找到符合条件的数据。\n\n请确认：\n1. 数据是否包含19列以上\n2. 第18列（R列）值为"设备接入"\n3. 第19列（S列）为http开头的链接\n4. 分隔符是否为Tab或逗号');
+                    return;
                 }
-            });
-
-            if (data.length === 0) {
-                alert('未找到符合条件的数据。\n\n请确认：\n1. 数据是否包含19列以上\n2. 第18列（R列）值为"设备接入"\n3. 第19列（S列）为http开头的链接\n4. 分隔符是否为Tab或逗号');
-                return;
             }
 
             startPlayer();
         }
 
-        // ========== Excel文件处理 ==========
+        // ========== Excel文件处理（始终多列模式） ==========
 
         function handleFile(e) {
             const file = e.target.files[0];
@@ -576,6 +666,15 @@
             document.getElementById('uploadScreen').style.display = 'none';
             document.getElementById('playerScreen').style.display = 'flex';
             document.getElementById('totalNum').textContent = data.length;
+
+            // 单列模式隐藏辅助信息区域
+            const dataInfo = document.getElementById('dataInfo');
+            if (isSingleMode) {
+                dataInfo.style.display = 'none';
+            } else {
+                dataInfo.style.display = 'flex';
+            }
+
             showQR(0);
             isPlaying = false;
             document.getElementById('playBtnText').textContent = '开始播放';
@@ -601,10 +700,12 @@
                 correctLevel: QRCode.CorrectLevel.M
             });
 
-            // 更新辅助信息
-            document.getElementById('colC').textContent = item.colC;
-            document.getElementById('colE').textContent = item.colE;
-            document.getElementById('colK').textContent = item.colK;
+            // 更新辅助信息（单列模式下隐藏）
+            if (!isSingleMode) {
+                document.getElementById('colC').textContent = item.colC;
+                document.getElementById('colE').textContent = item.colE;
+                document.getElementById('colK').textContent = item.colK;
+            }
             document.getElementById('urlDisplay').textContent = item.url;
             document.getElementById('currentNum').textContent = index + 1;
 
@@ -670,10 +771,15 @@
                 data = [];
                 currentIndex = 0;
                 isPlaying = false;
+                isSingleMode = false;
                 document.getElementById('playerScreen').style.display = 'none';
                 document.getElementById('uploadScreen').style.display = 'flex';
                 document.getElementById('fileInfo').textContent = '';
                 document.getElementById('fileInput').value = '';
+                document.getElementById('dataInfo').style.display = 'flex';
+                // 重置模式选择为多列
+                document.getElementById('modeMulti').checked = true;
+                updateModeDesc();
             }
         }
 
